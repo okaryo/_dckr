@@ -10,6 +10,13 @@ The runtime starts with a foreground `run` command and grows one experiment at a
 
 Run the experiments inside an ARM64 Linux VM with Go installed. In this project, the host side means the environment inside the VM and outside the container.
 
-The Go build and run check passed on ARM64 Linux. The first milestone will add `dckr run -- <command> [args...]` and use it to compare the same process's PID inside and outside a PID namespace. See [TODO.md](TODO.md) for the build check and the full roadmap.
+From the repository root, build `dckr` and run the baseline PID experiment.
+
+```sh
+go build -o dckr .
+./dckr run -- /bin/sh -c 'echo "inside PID=$$"'
+```
+
+The `outside PID` and `inside PID` lines report the same number because `dckr` and its child currently share a PID namespace. See [TODO.md](TODO.md) for the PID namespace experiment and the full roadmap.
 
 The project follows the workflow in [LEARNING_PROJECT.md](LEARNING_PROJECT.md).

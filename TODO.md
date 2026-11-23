@@ -11,8 +11,8 @@ Run the experiments in an ARM64 Linux VM. The host side means the environment in
 Compare the PID of the same child process from the host side and from inside a PID namespace. This milestone is in progress.
 
 - [x] Verify that Go can build and run a program in the Linux VM.
-- [ ] Use `os/exec` to implement `dckr run -- <command> [args...]`. Connect the child's standard output to the terminal, print its PID from the parent, and wait for the child to exit.
-- [ ] Run `dckr run -- /bin/sh -c 'echo "inside PID=$$"'` and confirm that the PID printed by the parent matches the shell's `$$`.
+- [x] Use `os/exec` to implement `dckr run -- <command> [args...]`. Connect the child's standard output to the terminal, print its PID from the parent, and wait for the child to exit.
+- [x] Run `./dckr run -- /bin/sh -c 'echo "inside PID=$$"'` and confirm that the PID printed by the parent matches the shell's `$$`.
 - [ ] Set `CLONE_NEWPID` in `syscall.SysProcAttr.Cloneflags` and run the same command. Confirm that the shell prints PID `1` and the parent prints the child's PID in the host namespace.
 - [ ] Explain in your own words why the same process has two PIDs. The milestone is complete when the comparison is reproducible and you can explain the result.
 
@@ -44,6 +44,10 @@ GO
 ```
 
 The program printed `Go program ran on linux/arm64` and exited successfully.
+
+### Baseline PID Comparison
+
+On ARM64 Linux, the command in [README.md](README.md#getting-started) printed `outside PID=1190` from `dckr` and `inside PID=1190` from the shell. The value varies between runs. The two numbers match because both processes share a PID namespace.
 
 ## Roadmap
 
