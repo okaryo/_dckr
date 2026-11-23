@@ -8,13 +8,42 @@ Run the experiments in an ARM64 Linux VM. The host side means the environment in
 
 ## First Milestone
 
-Compare the PID of the same child process from the host side and from inside a PID namespace. This milestone is pending.
+Compare the PID of the same child process from the host side and from inside a PID namespace. This milestone is in progress.
 
-- [ ] Verify that Go can build and run a program in the Linux VM.
+- [x] Verify that Go can build and run a program in the Linux VM.
 - [ ] Use `os/exec` to implement `dckr run -- <command> [args...]`. Connect the child's standard output to the terminal, print its PID from the parent, and wait for the child to exit.
 - [ ] Run `dckr run -- /bin/sh -c 'echo "inside PID=$$"'` and confirm that the PID printed by the parent matches the shell's `$$`.
 - [ ] Set `CLONE_NEWPID` in `syscall.SysProcAttr.Cloneflags` and run the same command. Confirm that the shell prints PID `1` and the parent prints the child's PID in the host namespace.
 - [ ] Explain in your own words why the same process has two PIDs. The milestone is complete when the comparison is reproducible and you can explain the result.
+
+### Linux Build Check
+
+Docker Desktop's Linux VM ran this check in a temporary ARM64 container using the official Go image.
+
+```sh
+docker --context desktop-linux run --rm -i --platform linux/arm64 --network none docker.io/library/golang:1.27.4-alpine3.24 sh -ec '
+  go version
+  uname -sm
+  test "$(go env GOOS GOARCH)" = "$(printf "linux\narm64")"
+  cd "$(mktemp -d)"
+  cat > main.go
+  go build -o check main.go
+  ./check
+' <<'GO'
+package main
+
+import (
+	"fmt"
+	"runtime"
+)
+
+func main() {
+	fmt.Printf("Go program ran on %s/%s\n", runtime.GOOS, runtime.GOARCH)
+}
+GO
+```
+
+The program printed `Go program ran on linux/arm64` and exited successfully.
 
 ## Roadmap
 
