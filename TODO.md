@@ -53,6 +53,14 @@ Before setting `CLONE_NEWPID`, the experiment on ARM64 Linux printed `outside PI
 
 With `CLONE_NEWPID`, the [Docker Desktop experiment](README.md#docker-desktop-on-macos) printed `outside PID=1217` and `inside PID=1`. Both numbers identify the same shell. The outer PID varies between runs, and the first process in each new PID namespace always starts at `1`.
 
+## Mount Namespace and procfs
+
+- [x] Start a child in new PID and mount namespaces. Give it a fresh procfs at `/proc`, then execute the requested command in the same process.
+- [x] Compare `ps` output from the PID-only build and the build that mounts procfs. Confirm that the outer `/proc` mount stays the same.
+- [x] Explain how the child's new procfs limits its `ps` output while the outer `ps` can still list the outer `sleep` process.
+
+In the ARM64 Linux experiment, `ps` in the PID-only build (`49460ce`) listed the outer `sleep` process and the parent `dckr`. With a fresh procfs, it listed only the shell at PID `1` and `ps` itself. The `sleep` process remained visible to `ps` outside, and the outer `/proc` mount kept its mount ID. The current experiment is reproducible from the [README](README.md#getting-started).
+
 ## Roadmap
 
 ### 1. Namespaces

@@ -8,18 +8,18 @@ The runtime starts with a foreground `run` command and grows one experiment at a
 
 ## Getting started
 
-Run the experiments on Linux with Go installed. From the repository root of a Linux VM, build `dckr` and run the PID namespace experiment with the privileges needed for `CLONE_NEWPID`.
+Run the experiments on Linux with Go installed. From the repository root of a Linux VM, build `dckr` and run the process visibility experiment with the privileges needed to create namespaces and mount procfs.
 
 ```sh
 go build -o dckr .
-sudo ./dckr run -- /bin/sh -c 'echo "inside PID=$$"'
+sudo ./dckr run -- /bin/sh -c 'ps -o pid,comm; echo "inside PID=$$"'
 ```
 
-`outside PID` is the child's PID as seen by `dckr`. `inside PID` is `1` because the shell is the first process in the new namespace.
+`dckr` starts a copy of itself in new PID and mount namespaces. That child mounts a fresh procfs at `/proc` and then replaces itself with the requested command. `ps` reads this `/proc` and lists the shell at PID `1` and the `ps` process itself. `outside PID` is the shell's PID as seen by the parent `dckr` process.
 
 ### Docker Desktop on macOS
 
-Run the same experiment from the repository root using a temporary ARM64 Go container in Docker Desktop's Linux VM. The container receives the two source files over standard input. `SYS_ADMIN` allows `dckr` to create the new PID namespace.
+Run the same experiment from the repository root using a temporary ARM64 Go container in Docker Desktop's Linux VM. The container receives the two source files over standard input. `SYS_ADMIN` allows `dckr` to create the namespaces and mount procfs.
 
 ```sh
 tar -cf - go.mod main.go |
@@ -29,7 +29,7 @@ tar -cf - go.mod main.go |
       cd "$(mktemp -d)"
       tar -xf -
       go build -o dckr .
-      ./dckr run -- /bin/sh -c "echo inside PID=\$\$"
+      ./dckr run -- /bin/sh -c "ps -o pid,comm; echo inside PID=\$\$"
     '
 ```
 
