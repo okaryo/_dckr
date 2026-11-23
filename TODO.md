@@ -4,17 +4,17 @@
 
 Build a small container runtime in Go to understand how Docker isolates processes, filesystems, and networks, and how it controls CPU and memory usage. Then explore how image layers form a container's root filesystem.
 
-Run the experiments in an ARM64 Linux VM. The host side means the environment inside the VM and outside the container. Start with a foreground `dckr run` command.
+Run the experiments in an ARM64 Linux VM. For the PID experiment, the outer namespace is the namespace where `dckr` runs. Start with a foreground `dckr run` command.
 
 ## First Milestone
 
-Compare the PID of the same child process from the host side and from inside a PID namespace. This milestone is in progress.
+Compare the PID of the same child process from the outer namespace and from inside its new PID namespace. The experiment and the understanding check are complete.
 
 - [x] Verify that Go can build and run a program in the Linux VM.
 - [x] Use `os/exec` to implement `dckr run -- <command> [args...]`. Connect the child's standard output to the terminal, print its PID from the parent, and wait for the child to exit.
 - [x] Run `./dckr run -- /bin/sh -c 'echo "inside PID=$$"'` and confirm that the PID printed by the parent matches the shell's `$$`.
-- [ ] Set `CLONE_NEWPID` in `syscall.SysProcAttr.Cloneflags` and run the same command. Confirm that the shell prints PID `1` and the parent prints the child's PID in the host namespace.
-- [ ] Explain in your own words why the same process has two PIDs. The milestone is complete when the comparison is reproducible and you can explain the result.
+- [x] Set `CLONE_NEWPID` in `syscall.SysProcAttr.Cloneflags` and run the same command. Confirm that the shell prints PID `1` and the parent prints the child's PID in the outer namespace.
+- [x] Explain why the child has PID `1` as the first process in its new namespace, even when its PID in the outer namespace changes between runs.
 
 ### Linux Build Check
 
@@ -47,7 +47,11 @@ The program printed `Go program ran on linux/arm64` and exited successfully.
 
 ### Baseline PID Comparison
 
-On ARM64 Linux, the command in [README.md](README.md#getting-started) printed `outside PID=1190` from `dckr` and `inside PID=1190` from the shell. The value varies between runs. The two numbers match because both processes share a PID namespace.
+Before setting `CLONE_NEWPID`, the experiment on ARM64 Linux printed `outside PID=1190` from `dckr` and `inside PID=1190` from the shell. The two numbers matched because both processes shared a PID namespace.
+
+### PID Namespace Comparison
+
+With `CLONE_NEWPID`, the [Docker Desktop experiment](README.md#docker-desktop-on-macos) printed `outside PID=1217` and `inside PID=1`. Both numbers identify the same shell. The outer PID varies between runs, and the first process in each new PID namespace always starts at `1`.
 
 ## Roadmap
 

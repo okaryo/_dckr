@@ -1,9 +1,12 @@
+//go:build linux
+
 package main
 
 import (
 	"fmt"
 	"os"
 	"os/exec"
+	"syscall"
 )
 
 func main() {
@@ -17,6 +20,7 @@ func run(args []string) int {
 	}
 
 	cmd := exec.Command(args[2], args[3:]...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Cloneflags: syscall.CLONE_NEWPID}
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
