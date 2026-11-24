@@ -23,9 +23,21 @@ func run(args []string) int {
 		}
 		return 1
 	}
-	if len(args) < 3 || args[0] != "run" || args[1] != "--" {
-		fmt.Fprintln(os.Stderr, "usage: dckr run -- <command> [args...]")
-		return 2
+	if len(args) == 0 || args[0] != "run" {
+		return runUsage()
+	}
+	args = args[1:]
+
+	rootfs := ""
+	if len(args) >= 2 && args[0] == "--rootfs" {
+		rootfs = args[1]
+		if rootfs == "" {
+			return runUsage()
+		}
+		args = args[2:]
+	}
+	if len(args) < 2 || args[0] != "--" {
+		return runUsage()
 	}
 
 	parentMountNamespace, err := os.Readlink(mountNamespacePath)
@@ -34,7 +46,7 @@ func run(args []string) int {
 		return 1
 	}
 
-	initArgs := append([]string{"init", parentMountNamespace}, args[2:]...)
+	initArgs := append([]string{"init", parentMountNamespace, rootfs}, args[1:]...)
 	cmd := exec.Command("/proc/self/exe", initArgs...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Cloneflags: syscall.CLONE_NEWPID | syscall.CLONE_NEWNS}
 	cmd.Stdin = os.Stdin
@@ -56,8 +68,13 @@ func run(args []string) int {
 	return 0
 }
 
+func runUsage() int {
+	fmt.Fprintln(os.Stderr, "usage: dckr run [--rootfs <directory>] -- <command> [args...]")
+	return 2
+}
+
 func initContainer(args []string) error {
-	if len(args) < 2 || os.Getpid() != 1 {
+	if len(args) < 3 || os.Getpid() != 1 {
 		return errors.New("init requires a command and must run as PID 1")
 	}
 	childMountNamespace, err := os.Readlink(mountNamespacePath)
@@ -68,19 +85,44 @@ func initContainer(args []string) error {
 		return errors.New("init must run in a new mount namespace")
 	}
 
-	commandArgs := args[1:]
-	path, err := exec.LookPath(commandArgs[0])
-	if err != nil {
-		return err
-	}
-
 	if err := syscall.Mount("", "/", "", syscall.MS_REC|syscall.MS_PRIVATE, ""); err != nil {
 		return fmt.Errorf("make mounts private: %w", err)
+	}
+	if rootfs := args[1]; rootfs != "" {
+		if err := switchRoot(rootfs); err != nil {
+			return err
+		}
 	}
 	if err := syscall.Mount("proc", "/proc", "proc", syscall.MS_NOSUID|syscall.MS_NODEV|syscall.MS_NOEXEC, ""); err != nil {
 		return fmt.Errorf("mount procfs: %w", err)
 	}
 
+	commandArgs := args[2:]
+	path, err := exec.LookPath(commandArgs[0])
+	if err != nil {
+		return err
+	}
+
 	// Exec replaces this process with the command, preserving its PID.
 	return syscall.Exec(path, commandArgs, os.Environ())
+}
+
+func switchRoot(rootfs string) error {
+	if err := syscall.Mount(rootfs, rootfs, "", syscall.MS_BIND, ""); err != nil {
+		return fmt.Errorf("bind mount rootfs %q: %w", rootfs, err)
+	}
+	if err := os.Chdir(rootfs); err != nil {
+		return fmt.Errorf("enter rootfs %q: %w", rootfs, err)
+	}
+	// Stack the old root on the new root so it can be detached at ".".
+	if err := syscall.PivotRoot(".", "."); err != nil {
+		return fmt.Errorf("pivot root to %q: %w", rootfs, err)
+	}
+	if err := syscall.Unmount(".", syscall.MNT_DETACH); err != nil {
+		return fmt.Errorf("detach old root: %w", err)
+	}
+	if err := os.Chdir("/"); err != nil {
+		return fmt.Errorf("enter new root: %w", err)
+	}
+	return nil
 }

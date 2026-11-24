@@ -27,9 +27,20 @@ sudo sh examples/pid1-exit.sh
 
 The inner shell starts a background `sleep` and waits for input. The outer shell finds that worker in its own `/proc`, tells PID `1` to exit, then checks the same worker's entry again. Linux terminates the remaining processes in the inner PID namespace when its PID `1` exits.
 
+### Root filesystem
+
+Pass `--rootfs` to use an unpacked directory as `/` for the requested command. The directory needs a `/proc` mount point, the command and any libraries it needs, and an `/etc/os-release` file for this experiment. For example, with BusyBox installed at `./rootfs/bin/busybox`, compare the same path from both sides.
+
+```sh
+cat /etc/os-release
+sudo ./dckr run --rootfs ./rootfs -- /bin/busybox cat /etc/os-release
+```
+
+The child bind-mounts the directory onto itself, switches to it with `pivot_root`, and detaches the old root. It then mounts procfs and looks up the command from under the new `/`.
+
 ### Docker Desktop on macOS
 
-Run both experiments from the repository root using a temporary ARM64 Go container in Docker Desktop's Linux VM. The container receives the source files and the example script over standard input. `SYS_ADMIN` allows `dckr` to create the namespaces and mount procfs.
+Run the experiments from the repository root using a temporary ARM64 Go container in Docker Desktop's Linux VM. The container receives the source files and the example script over standard input. `SYS_ADMIN` allows `dckr` to create the namespaces, mount procfs, and switch the root mount.
 
 ```sh
 tar -cf - go.mod main.go examples/pid1-exit.sh |
@@ -41,6 +52,13 @@ tar -cf - go.mod main.go examples/pid1-exit.sh |
       go build -o dckr .
       ./dckr run -- /bin/sh -c "ps -o pid,comm; echo inside PID=\$\$"
       sh examples/pid1-exit.sh
+
+      mkdir -p rootfs/bin rootfs/etc rootfs/lib rootfs/proc
+      cp /bin/busybox rootfs/bin/
+      cp -L /lib/ld-musl-aarch64.so.1 rootfs/lib/
+      printf "NAME=\"dckr rootfs\"\n" > rootfs/etc/os-release
+      sed -n "s/^NAME=/Outside NAME=/p" /etc/os-release
+      ./dckr run --rootfs rootfs -- /bin/busybox cat /etc/os-release
     '
 ```
 

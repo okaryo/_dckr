@@ -69,6 +69,14 @@ In the ARM64 Linux experiment, `ps` in the PID-only build (`49460ce`) listed the
 
 On ARM64 Linux, the inner `sleep` had PID `6` inside and PID `781` outside. The outer `/proc/781` entry disappeared when the inner shell exited, while a separate outer `sleep` kept running. See the [example](examples/pid1-exit.sh) and [run instructions](README.md#pid-1-exit).
 
+## Root Filesystem
+
+- [x] Add `--rootfs` to bind-mount an unpacked directory, make it `/` with `pivot_root`, and detach the old root inside the child's mount namespace.
+- [x] Compare `/etc/os-release` inside and outside. Check that a file present only outside is absent inside and that the child can still read `/proc/1/status`.
+- [x] Explain why opening the same absolute path from the two sides can return different files.
+
+On ARM64 Linux, `/etc/os-release` reported `NAME="Alpine Linux"` outside and `NAME="dckr rootfs"` inside. The [Docker Desktop commands](README.md#docker-desktop-on-macos) prepare the minimal rootfs and reproduce the comparison.
+
 ## Roadmap
 
 ### 1. Namespaces
