@@ -61,6 +61,14 @@ With `CLONE_NEWPID`, the [Docker Desktop experiment](README.md#docker-desktop-on
 
 In the ARM64 Linux experiment, `ps` in the PID-only build (`49460ce`) listed the outer `sleep` process and the parent `dckr`. With a fresh procfs, it listed only the shell at PID `1` and `ps` itself. The `sleep` process remained visible to `ps` outside, and the outer `/proc` mount kept its mount ID. The current experiment is reproducible from the [README](README.md#getting-started).
 
+## PID 1 Exit
+
+- [x] Start a worker inside the namespace and let PID `1` exit while the worker is running.
+- [x] Confirm from the outer namespace that the inner worker disappears and that an outer worker keeps running.
+- [x] Explain why the inner worker's lifetime depends on PID `1` and how the namespace boundary determines which processes are terminated.
+
+On ARM64 Linux, the inner `sleep` had PID `6` inside and PID `781` outside. The outer `/proc/781` entry disappeared when the inner shell exited, while a separate outer `sleep` kept running. See the [example](examples/pid1-exit.sh) and [run instructions](README.md#pid-1-exit).
+
 ## Roadmap
 
 ### 1. Namespaces

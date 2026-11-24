@@ -17,12 +17,22 @@ sudo ./dckr run -- /bin/sh -c 'ps -o pid,comm; echo "inside PID=$$"'
 
 `dckr` starts a copy of itself in new PID and mount namespaces. That child mounts a fresh procfs at `/proc` and then replaces itself with the requested command. `ps` reads this `/proc` and lists the shell at PID `1` and the `ps` process itself. `outside PID` is the shell's PID as seen by the parent `dckr` process.
 
-### Docker Desktop on macOS
+### PID 1 exit
 
-Run the same experiment from the repository root using a temporary ARM64 Go container in Docker Desktop's Linux VM. The container receives the two source files over standard input. `SYS_ADMIN` allows `dckr` to create the namespaces and mount procfs.
+After building `dckr` on Linux, run the example from the repository root.
 
 ```sh
-tar -cf - go.mod main.go |
+sudo sh examples/pid1-exit.sh
+```
+
+The inner shell starts a background `sleep` and waits for input. The outer shell finds that worker in its own `/proc`, tells PID `1` to exit, then checks the same worker's entry again. Linux terminates the remaining processes in the inner PID namespace when its PID `1` exits.
+
+### Docker Desktop on macOS
+
+Run both experiments from the repository root using a temporary ARM64 Go container in Docker Desktop's Linux VM. The container receives the source files and the example script over standard input. `SYS_ADMIN` allows `dckr` to create the namespaces and mount procfs.
+
+```sh
+tar -cf - go.mod main.go examples/pid1-exit.sh |
   docker --context desktop-linux run --rm -i --platform linux/arm64 \
     --network none --cap-drop ALL --cap-add SYS_ADMIN \
     docker.io/library/golang:1.27.4-alpine3.24 sh -ec '
@@ -30,6 +40,7 @@ tar -cf - go.mod main.go |
       tar -xf -
       go build -o dckr .
       ./dckr run -- /bin/sh -c "ps -o pid,comm; echo inside PID=\$\$"
+      sh examples/pid1-exit.sh
     '
 ```
 
