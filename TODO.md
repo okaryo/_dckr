@@ -85,6 +85,14 @@ On ARM64 Linux, `/etc/os-release` reported `NAME="Alpine Linux"` outside and `NA
 
 On ARM64 Linux, the two-second workload used `2008687` microseconds of CPU time with no local quota and `513260` microseconds with the quota. `nr_throttled` was `0` in the baseline and `20` in the limited group. See the [run instructions](README.md#cpu-limits-with-cgroup-v2).
 
+## cgroup v2 Memory Limits
+
+- [x] Run the same 64 MiB memory workload in a baseline cgroup and a cgroup with `memory.max` set to 32 MiB.
+- [x] Compare the exit status and `memory.events` for both runs.
+- [x] Explain how `memory.events` shows that the worker was killed because of an out-of-memory condition.
+
+On ARM64 Linux, the baseline worker touched all 64 MiB, exited with status `0`, and recorded `oom_kill 0`. In the limited group, the kernel killed the worker, `dckr` returned status `1`, and `memory.events` recorded `oom 1` and `oom_kill 1`. See the [run instructions](README.md#memory-limits-with-cgroup-v2).
+
 ## Roadmap
 
 ### 1. Namespaces

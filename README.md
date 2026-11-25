@@ -50,12 +50,22 @@ sudo sh examples/cgroup-cpu.sh /path/to/cgroup-parent
 
 The script runs the same workload twice. `max 100000` leaves the baseline without a local CPU quota. `25000 100000` gives the entire limited group up to 25 ms of CPU time every 100 ms, equivalent to one quarter of one CPU under sustained load. In `cpu.stat`, `usage_usec` reports CPU time used and `nr_throttled` counts the times the group was throttled.
 
-### Docker Desktop on macOS
+### Memory limits with cgroup v2
 
-Run the experiments from the repository root using a temporary ARM64 Go container in Docker Desktop's Linux VM. The container receives the source files and example scripts over standard input. `SYS_ADMIN` allows `dckr` to create namespaces, mount procfs, and switch the root mount. The CPU example mounts a writable view of the temporary container's cgroup subtree and moves the launcher into its own child cgroup before enabling the `cpu` controller in its parent.
+Give the example a writable cgroup v2 parent with the `memory` controller enabled for its children. The script uses Go to build the worker, so `go` must be available on its `PATH`.
 
 ```sh
-tar -cf - go.mod main.go examples/pid1-exit.sh examples/cgroup-cpu.sh |
+sudo sh examples/cgroup-memory.sh /path/to/cgroup-parent
+```
+
+The worker writes to every page in a 64 MiB buffer. The baseline uses the default `memory.max` of `max` and inherits any ancestor limits. The limited group sets `memory.max` to 32 MiB. Both groups set their swap limit to zero when the swap controller file is available. When Linux cannot reclaim enough memory to satisfy an allocation in the limited group, the out-of-memory killer terminates the worker. `dckr` reports `signal: killed` and exits with status `1`. The increase in `oom_kill` in `memory.events` records the reason.
+
+### Docker Desktop on macOS
+
+Run the experiments from the repository root using a temporary ARM64 Go container in Docker Desktop's Linux VM. The container receives the source files and example scripts over standard input. `SYS_ADMIN` allows `dckr` to create namespaces, mount procfs, and switch the root mount. The cgroup experiments use a writable view of the temporary container's cgroup subtree. The launcher moves into its own child cgroup before enabling `cpu` and `memory` in its parent.
+
+```sh
+tar -cf - go.mod main.go examples/pid1-exit.sh examples/cgroup-cpu.sh examples/cgroup-memory.sh |
   docker --context desktop-linux run --rm -i --platform linux/arm64 \
     --network none --cap-drop ALL --cap-add SYS_ADMIN --cgroupns private \
     docker.io/library/golang:1.27.4-alpine3.24 sh -ec '
@@ -76,8 +86,9 @@ tar -cf - go.mod main.go examples/pid1-exit.sh examples/cgroup-cpu.sh |
       mount -t cgroup2 none "$tree"
       mkdir "$tree/launcher"
       printf "%s\n" "$$" > "$tree/launcher/cgroup.procs"
-      printf "+cpu\n" > "$tree/cgroup.subtree_control"
+      printf "+cpu +memory\n" > "$tree/cgroup.subtree_control"
       sh examples/cgroup-cpu.sh "$tree"
+      sh examples/cgroup-memory.sh "$tree"
     '
 ```
 
