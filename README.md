@@ -38,14 +38,26 @@ sudo ./dckr run --rootfs ./rootfs -- /bin/busybox cat /etc/os-release
 
 The child bind-mounts the directory onto itself, switches to it with `pivot_root`, and detaches the old root. It then mounts procfs and looks up the command from under the new `/`.
 
-### Docker Desktop on macOS
+### CPU limits with cgroup v2
 
-Run the experiments from the repository root using a temporary ARM64 Go container in Docker Desktop's Linux VM. The container receives the source files and the example script over standard input. `SYS_ADMIN` allows `dckr` to create the namespaces, mount procfs, and switch the root mount.
+`--cgroup <directory>` starts a child directly in an existing cgroup v2 leaf. This uses `CLONE_INTO_CGROUP`, which requires Linux 5.7 or later. The caller prepares the cgroup and its limits.
+
+To compare two CPU quotas on Linux, give the example a writable cgroup v2 parent with the `cpu` controller enabled for its children.
 
 ```sh
-tar -cf - go.mod main.go examples/pid1-exit.sh |
+sudo sh examples/cgroup-cpu.sh /path/to/cgroup-parent
+```
+
+The script runs the same workload twice. `max 100000` leaves the baseline without a local CPU quota. `25000 100000` gives the entire limited group up to 25 ms of CPU time every 100 ms, equivalent to one quarter of one CPU under sustained load. In `cpu.stat`, `usage_usec` reports CPU time used and `nr_throttled` counts the times the group was throttled.
+
+### Docker Desktop on macOS
+
+Run the experiments from the repository root using a temporary ARM64 Go container in Docker Desktop's Linux VM. The container receives the source files and example scripts over standard input. `SYS_ADMIN` allows `dckr` to create namespaces, mount procfs, and switch the root mount. The CPU example mounts a writable view of the temporary container's cgroup subtree and moves the launcher into its own child cgroup before enabling the `cpu` controller in its parent.
+
+```sh
+tar -cf - go.mod main.go examples/pid1-exit.sh examples/cgroup-cpu.sh |
   docker --context desktop-linux run --rm -i --platform linux/arm64 \
-    --network none --cap-drop ALL --cap-add SYS_ADMIN \
+    --network none --cap-drop ALL --cap-add SYS_ADMIN --cgroupns private \
     docker.io/library/golang:1.27.4-alpine3.24 sh -ec '
       cd "$(mktemp -d)"
       tar -xf -
@@ -59,6 +71,13 @@ tar -cf - go.mod main.go examples/pid1-exit.sh |
       printf "NAME=\"dckr rootfs\"\n" > rootfs/etc/os-release
       sed -n "s/^NAME=/Outside NAME=/p" /etc/os-release
       ./dckr run --rootfs rootfs -- /bin/busybox cat /etc/os-release
+
+      tree=$(mktemp -d)
+      mount -t cgroup2 none "$tree"
+      mkdir "$tree/launcher"
+      printf "%s\n" "$$" > "$tree/launcher/cgroup.procs"
+      printf "+cpu\n" > "$tree/cgroup.subtree_control"
+      sh examples/cgroup-cpu.sh "$tree"
     '
 ```
 

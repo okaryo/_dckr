@@ -77,6 +77,14 @@ On ARM64 Linux, the inner `sleep` had PID `6` inside and PID `781` outside. The 
 
 On ARM64 Linux, `/etc/os-release` reported `NAME="Alpine Linux"` outside and `NAME="dckr rootfs"` inside. The [Docker Desktop commands](README.md#docker-desktop-on-macos) prepare the minimal rootfs and reproduce the comparison.
 
+## cgroup v2 CPU Limits
+
+- [x] Start the `dckr` child directly in a prepared cgroup v2 leaf with `--cgroup`.
+- [x] Run the same CPU-heavy workload with `cpu.max` set to `max 100000` and `25000 100000`. Compare CPU usage and throttling in `cpu.stat`.
+- [x] Explain what the two values in `cpu.max` mean and what happens when the group spends its quota before the period ends.
+
+On ARM64 Linux, the two-second workload used `2008687` microseconds of CPU time with no local quota and `513260` microseconds with the quota. `nr_throttled` was `0` in the baseline and `20` in the limited group. See the [run instructions](README.md#cpu-limits-with-cgroup-v2).
+
 ## Roadmap
 
 ### 1. Namespaces

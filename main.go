@@ -29,9 +29,17 @@ func run(args []string) int {
 	args = args[1:]
 
 	rootfs := ""
-	if len(args) >= 2 && args[0] == "--rootfs" {
-		rootfs = args[1]
-		if rootfs == "" {
+	cgroupPath := ""
+	for len(args) >= 2 && args[0] != "--" {
+		if args[1] == "" {
+			return runUsage()
+		}
+		switch args[0] {
+		case "--rootfs":
+			rootfs = args[1]
+		case "--cgroup":
+			cgroupPath = args[1]
+		default:
 			return runUsage()
 		}
 		args = args[2:]
@@ -49,6 +57,16 @@ func run(args []string) int {
 	initArgs := append([]string{"init", parentMountNamespace, rootfs}, args[1:]...)
 	cmd := exec.Command("/proc/self/exe", initArgs...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Cloneflags: syscall.CLONE_NEWPID | syscall.CLONE_NEWNS}
+	if cgroupPath != "" {
+		cgroupFD, err := syscall.Open(cgroupPath, syscall.O_RDONLY|syscall.O_DIRECTORY|syscall.O_CLOEXEC, 0)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "dckr: open cgroup %q: %v\n", cgroupPath, err)
+			return 1
+		}
+		defer syscall.Close(cgroupFD)
+		cmd.SysProcAttr.UseCgroupFD = true
+		cmd.SysProcAttr.CgroupFD = cgroupFD
+	}
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -69,7 +87,7 @@ func run(args []string) int {
 }
 
 func runUsage() int {
-	fmt.Fprintln(os.Stderr, "usage: dckr run [--rootfs <directory>] -- <command> [args...]")
+	fmt.Fprintln(os.Stderr, "usage: dckr run [--rootfs <directory>] [--cgroup <directory>] -- <command> [args...]")
 	return 2
 }
 
