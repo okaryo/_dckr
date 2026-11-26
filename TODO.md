@@ -93,6 +93,14 @@ On ARM64 Linux, the two-second workload used `2008687` microseconds of CPU time 
 
 On ARM64 Linux, the baseline worker touched all 64 MiB, exited with status `0`, and recorded `oom_kill 0`. In the limited group, the kernel killed the worker, `dckr` returned status `1`, and `memory.events` recorded `oom 1` and `oom_kill 1`. See the [run instructions](README.md#memory-limits-with-cgroup-v2).
 
+## Network Namespace and Loopback
+
+- [x] Add `--network none` and compare the interfaces and IPv4 routes with the default run.
+- [x] Bring up `lo` inside the new namespace and verify that `127.0.0.1` responds there.
+- [x] Explain which network namespace a loopback packet stays in and why bringing up `lo` alone leaves the outer interface unreachable.
+
+On ARM64 Linux, the default run saw `dckr-outer` and its route for `192.0.2.0/24`. The new namespace showed neither and had its own `lo`, initially down. After `ip link set dev lo up`, a ping to `127.0.0.1` received a reply. The LinuxKit kernel also created unconfigured tunnel devices in the new namespace. See the [run instructions](README.md#network-namespace-experiment).
+
 ## Roadmap
 
 ### 1. Namespaces

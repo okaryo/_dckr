@@ -60,6 +60,16 @@ sudo sh examples/cgroup-memory.sh /path/to/cgroup-parent
 
 The worker writes to every page in a 64 MiB buffer. The baseline uses the default `memory.max` of `max` and inherits any ancestor limits. The limited group sets `memory.max` to 32 MiB. Both groups set their swap limit to zero when the swap controller file is available. When Linux cannot reclaim enough memory to satisfy an allocation in the limited group, the out-of-memory killer terminates the worker. `dckr` reports `signal: killed` and exits with status `1`. The increase in `oom_kill` in `memory.events` records the reason.
 
+### Network namespaces
+
+`--network none` launches the child in a new network namespace using `CLONE_NEWNET`. By default, `dckr run` uses the caller's network namespace. On Linux with `ip` and `ping` installed, compare the interfaces and IPv4 routes from both runs.
+
+```sh
+sudo sh examples/network-namespace.sh
+```
+
+The example shows the new namespace's initial state, then brings up its loopback interface (`lo`) and pings `127.0.0.1`. Some kernel configurations also create unconfigured tunnel devices such as `tunl0` in each namespace.
+
 ### Docker Desktop on macOS
 
 Run the experiments from the repository root using a temporary ARM64 Go container in Docker Desktop's Linux VM. The container receives the source files and example scripts over standard input. `SYS_ADMIN` allows `dckr` to create namespaces, mount procfs, and switch the root mount. The cgroup experiments use a writable view of the temporary container's cgroup subtree. The launcher moves into its own child cgroup before enabling `cpu` and `memory` in its parent.
@@ -93,5 +103,24 @@ tar -cf - go.mod main.go examples/pid1-exit.sh examples/cgroup-cpu.sh examples/c
 ```
 
 Here, the outer PID namespace is the temporary Go container's namespace. See [TODO.md](TODO.md) for recorded results and the full roadmap.
+
+#### Network namespace experiment
+
+Run this example in a temporary Go container with its own network namespace. The veth pair adds a comparison interface and an IPv4 route inside that temporary container. `NET_ADMIN` allows the example to configure interfaces, and `NET_RAW` allows it to run `ping`.
+
+```sh
+tar -cf - go.mod main.go examples/network-namespace.sh |
+  docker --context desktop-linux run --rm -i --platform linux/arm64 \
+    --network none --cap-drop ALL --cap-add SYS_ADMIN --cap-add NET_ADMIN --cap-add NET_RAW \
+    docker.io/library/golang:1.27.4-alpine3.24 sh -ec '
+      cd "$(mktemp -d)"
+      tar -xf -
+      go build -o dckr .
+      ip link add name dckr-outer type veth peer name dckr-peer
+      ip addr add 192.0.2.1/24 dev dckr-outer
+      ip link set dev dckr-outer up
+      sh examples/network-namespace.sh
+    '
+```
 
 The project follows the workflow in [LEARNING_PROJECT.md](LEARNING_PROJECT.md).

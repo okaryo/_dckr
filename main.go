@@ -30,6 +30,7 @@ func run(args []string) int {
 
 	rootfs := ""
 	cgroupPath := ""
+	isolateNetwork := false
 	for len(args) >= 2 && args[0] != "--" {
 		if args[1] == "" {
 			return runUsage()
@@ -39,6 +40,11 @@ func run(args []string) int {
 			rootfs = args[1]
 		case "--cgroup":
 			cgroupPath = args[1]
+		case "--network":
+			if args[1] != "none" {
+				return runUsage()
+			}
+			isolateNetwork = true
 		default:
 			return runUsage()
 		}
@@ -57,6 +63,9 @@ func run(args []string) int {
 	initArgs := append([]string{"init", parentMountNamespace, rootfs}, args[1:]...)
 	cmd := exec.Command("/proc/self/exe", initArgs...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Cloneflags: syscall.CLONE_NEWPID | syscall.CLONE_NEWNS}
+	if isolateNetwork {
+		cmd.SysProcAttr.Cloneflags |= syscall.CLONE_NEWNET
+	}
 	if cgroupPath != "" {
 		cgroupFD, err := syscall.Open(cgroupPath, syscall.O_RDONLY|syscall.O_DIRECTORY|syscall.O_CLOEXEC, 0)
 		if err != nil {
@@ -87,7 +96,7 @@ func run(args []string) int {
 }
 
 func runUsage() int {
-	fmt.Fprintln(os.Stderr, "usage: dckr run [--rootfs <directory>] [--cgroup <directory>] -- <command> [args...]")
+	fmt.Fprintln(os.Stderr, "usage: dckr run [--rootfs <directory>] [--cgroup <directory>] [--network none] -- <command> [args...]")
 	return 2
 }
 
