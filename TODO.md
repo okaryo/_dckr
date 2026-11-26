@@ -109,6 +109,14 @@ On ARM64 Linux, the default run saw `dckr-outer` and its route for `192.0.2.0/24
 
 On ARM64 Linux, the outer `192.0.2.1` and inner `192.0.2.2` each received one response to one ping. The temporary pair and route disappeared after the child exited. See the [example](examples/veth.sh) and [run instructions](README.md#connecting-namespaces-with-veth).
 
+## Linux Bridge
+
+- [x] Start two `dckr` children in separate network namespaces and give them addresses in the same subnet on two separate veth pairs.
+- [x] Compare ping before and after connecting both outer veth endpoints to the same Linux bridge.
+- [x] Explain how the bridge connects the two veth pairs and why the children can reach each other.
+
+On ARM64 Linux, the first ping from `192.0.2.1` to `192.0.2.2` received no reply. After both outer veth endpoints joined the bridge, each child received a reply from the other. The bridge and the veth links were removed after the experiment. See the [example](examples/bridge.sh) and [run instructions](README.md#connecting-two-namespaces-with-a-bridge).
+
 ## Roadmap
 
 ### 1. Namespaces
