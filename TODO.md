@@ -101,6 +101,14 @@ On ARM64 Linux, the baseline worker touched all 64 MiB, exited with status `0`, 
 
 On ARM64 Linux, the default run saw `dckr-outer` and its route for `192.0.2.0/24`. The new namespace showed neither and had its own `lo`, initially down. After `ip link set dev lo up`, a ping to `127.0.0.1` received a reply. The LinuxKit kernel also created unconfigured tunnel devices in the new namespace. See the [run instructions](README.md#network-namespace-experiment).
 
+## Connecting Network Namespaces with veth
+
+- [x] Create a veth pair and move one endpoint to the `dckr` child's network namespace.
+- [x] Assign both endpoints addresses in `192.0.2.0/30` and confirm that ping works in both directions.
+- [x] Explain how a packet sent on one veth endpoint reaches the other network namespace.
+
+On ARM64 Linux, the outer `192.0.2.1` and inner `192.0.2.2` each received one response to one ping. The temporary pair and route disappeared after the child exited. See the [example](examples/veth.sh) and [run instructions](README.md#connecting-namespaces-with-veth).
+
 ## Roadmap
 
 ### 1. Namespaces
@@ -124,7 +132,7 @@ On ARM64 Linux, the default run saw `dckr-outer` and its route for `192.0.2.0/24
 ### 4. Networking
 
 - **Question** — How can containers with separate network namespaces reach one another and external destinations?
-- **Experiment** — Connect two network namespaces to a Linux bridge with veth pairs. Set the bridge IP as the containers' default gateway, then enable IP forwarding and NAT on the VM side.
+- **Experiment** — Connect a child namespace to the outer namespace with one veth pair. Then connect two child namespaces to a Linux bridge with separate veth pairs. Set the bridge IP as the containers' default gateway, then enable IP forwarding and NAT on the VM side.
 - **Observation** — At each step, test connectivity by IP address to the other container and to a destination outside the VM.
 
 ### 5. Images

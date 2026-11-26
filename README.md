@@ -70,6 +70,16 @@ sudo sh examples/network-namespace.sh
 
 The example shows the new namespace's initial state, then brings up its loopback interface (`lo`) and pings `127.0.0.1`. Some kernel configurations also create unconfigured tunnel devices such as `tunl0` in each namespace.
 
+### Connecting namespaces with veth
+
+A veth pair has two connected virtual Ethernet interfaces. The example keeps one interface outside and moves its peer to the `dckr` child's network namespace using the child's outer PID. It gives the two interfaces addresses in `192.0.2.0/30`, brings both links up, and pings across the link in both directions.
+
+```sh
+sudo sh examples/veth.sh
+```
+
+Run this experiment in a Linux VM or use the Docker Desktop commands below. The example assigns `192.0.2.1/30` outside and `192.0.2.2/30` inside.
+
 ### Docker Desktop on macOS
 
 Run the experiments from the repository root using a temporary ARM64 Go container in Docker Desktop's Linux VM. The container receives the source files and example scripts over standard input. `SYS_ADMIN` allows `dckr` to create namespaces, mount procfs, and switch the root mount. The cgroup experiments use a writable view of the temporary container's cgroup subtree. The launcher moves into its own child cgroup before enabling `cpu` and `memory` in its parent.
@@ -106,10 +116,10 @@ Here, the outer PID namespace is the temporary Go container's namespace. See [TO
 
 #### Network namespace experiment
 
-Run this example in a temporary Go container with its own network namespace. The veth pair adds a comparison interface and an IPv4 route inside that temporary container. `NET_ADMIN` allows the example to configure interfaces, and `NET_RAW` allows it to run `ping`.
+Run these examples in a temporary Go container with its own network namespace. The first veth pair adds a comparison interface and route for the loopback experiment. The second example creates its own pair to connect to the child. `NET_ADMIN` allows the examples to configure interfaces, and `NET_RAW` allows them to run `ping`.
 
 ```sh
-tar -cf - go.mod main.go examples/network-namespace.sh |
+tar -cf - go.mod main.go examples/network-namespace.sh examples/veth.sh |
   docker --context desktop-linux run --rm -i --platform linux/arm64 \
     --network none --cap-drop ALL --cap-add SYS_ADMIN --cap-add NET_ADMIN --cap-add NET_RAW \
     docker.io/library/golang:1.27.4-alpine3.24 sh -ec '
@@ -120,6 +130,8 @@ tar -cf - go.mod main.go examples/network-namespace.sh |
       ip addr add 192.0.2.1/24 dev dckr-outer
       ip link set dev dckr-outer up
       sh examples/network-namespace.sh
+      ip link del dev dckr-outer
+      sh examples/veth.sh
     '
 ```
 
