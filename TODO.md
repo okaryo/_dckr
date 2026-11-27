@@ -117,6 +117,15 @@ On ARM64 Linux, the outer `192.0.2.1` and inner `192.0.2.2` each received one re
 
 On ARM64 Linux, the first ping from `192.0.2.1` to `192.0.2.2` received no reply. After both outer veth endpoints joined the bridge, each child received a reply from the other. The bridge and the veth links were removed after the experiment. See the [example](examples/bridge.sh) and [run instructions](README.md#connecting-two-namespaces-with-a-bridge).
 
+## IPv4 Forwarding and Source NAT
+
+- [x] Connect a client on a bridge to a separate upstream subnet through an isolated router namespace.
+- [x] Compare ping before and after adding the default route, enabling forwarding, and providing a return path.
+- [x] Remove the upstream return route and confirm that source NAT makes ping work again.
+- [x] Explain what address the upstream replies to after source NAT and how the router returns the reply to the client.
+
+On ARM64 Linux, the client reached its gateway at `192.0.2.1`, but its ping to `198.51.100.2` received no reply until the router forwarded packets and the upstream had a return path. An explicit return route worked. After removing it, source NAT to `198.51.100.1` also worked, and the NAT rule counted one packet. The enclosing network namespace kept its original links, routes, and forwarding setting. See the [example](examples/network-egress.sh) and [run instructions](README.md#ipv4-forwarding-and-nat-experiment).
+
 ## Roadmap
 
 ### 1. Namespaces
@@ -141,7 +150,7 @@ On ARM64 Linux, the first ping from `192.0.2.1` to `192.0.2.2` received no reply
 
 - **Question** — How can containers with separate network namespaces reach one another and external destinations?
 - **Experiment** — Connect a child namespace to the outer namespace with one veth pair. Then connect two child namespaces to a Linux bridge with separate veth pairs. Set the bridge IP as the containers' default gateway, then enable IP forwarding and NAT on the VM side.
-- **Observation** — At each step, test connectivity by IP address to the other container and to a destination outside the VM.
+- **Observation** — At each step, test connectivity by IP address to the other container and to an upstream destination on a separate subnet.
 
 ### 5. Images
 

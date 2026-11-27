@@ -92,6 +92,18 @@ sudo sh examples/bridge.sh
 
 The script uses `nsenter -t <PID> -n` to configure the inner interfaces and run `ping` in each child's network namespace. Both children get addresses in `192.0.2.0/30`. The first ping times out while the veth pairs are separate. After both outer ends join the bridge, pings succeed in both directions.
 
+### IPv4 forwarding and source NAT
+
+Run this example on Linux with `ip`, `ping`, `nsenter`, and `iptables` available, or use the Docker Desktop commands below.
+
+```sh
+sudo sh examples/network-egress.sh
+```
+
+The script creates a router in its own network namespace. The client's bridge gateway is `192.0.2.1`. The router also has an interface at `198.51.100.1` connected to a separate upstream namespace at `198.51.100.2`. The experiment changes routes, IPv4 forwarding, and NAT only inside these namespaces.
+
+The client first adds a default route through the bridge gateway. The router then enables IPv4 forwarding. The upstream reply succeeds with either an explicit route back to `192.0.2.0/30` or a source NAT rule that changes the client's source address to `198.51.100.1`. The final `iptables` output shows the packet count on the NAT rule.
+
 ### Docker Desktop on macOS
 
 Run the experiments from the repository root using a temporary ARM64 Go container in Docker Desktop's Linux VM. The container receives the source files and example scripts over standard input. `SYS_ADMIN` allows `dckr` to create namespaces, mount procfs, and switch the root mount. The cgroup experiments use a writable view of the temporary container's cgroup subtree. The launcher moves into its own child cgroup before enabling `cpu` and `memory` in its parent.
@@ -131,7 +143,7 @@ Here, the outer PID namespace is the temporary Go container's namespace. See [TO
 Run these examples in a temporary Go container with its own network namespace. The loopback experiment uses a comparison interface and route. The veth and bridge experiments create their own links. `NET_ADMIN` allows the examples to configure interfaces, and `NET_RAW` allows them to run `ping`.
 
 ```sh
-tar -cf - go.mod main.go examples/network-namespace.sh examples/veth.sh examples/bridge.sh |
+tar -cf - go.mod main.go examples/network-namespace.sh examples/network-helpers.sh examples/veth.sh examples/bridge.sh |
   docker --context desktop-linux run --rm -i --platform linux/arm64 \
     --network none --cap-drop ALL --cap-add SYS_ADMIN --cap-add NET_ADMIN --cap-add NET_RAW \
     docker.io/library/golang:1.27.4-alpine3.24 sh -ec '
@@ -145,6 +157,23 @@ tar -cf - go.mod main.go examples/network-namespace.sh examples/veth.sh examples
       ip link del dev dckr-outer
       sh examples/veth.sh
       sh examples/bridge.sh
+    '
+```
+
+#### IPv4 forwarding and NAT experiment
+
+The temporary Go container uses Docker's bridge network to install `iptables` from Alpine's package repository. The experiment itself uses its own router and upstream namespaces and sends pings only between them.
+
+```sh
+tar -cf - go.mod main.go examples/network-helpers.sh examples/network-egress.sh |
+  docker --context desktop-linux run --rm -i --platform linux/arm64 \
+    --network bridge --cap-drop ALL --cap-add SYS_ADMIN --cap-add NET_ADMIN --cap-add NET_RAW \
+    docker.io/library/golang:1.27.4-alpine3.24 sh -ec '
+      apk add --no-cache iptables
+      cd "$(mktemp -d)"
+      tar -xf -
+      go build -o dckr .
+      sh examples/network-egress.sh
     '
 ```
 

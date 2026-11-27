@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 
+. ./examples/network-helpers.sh
+
 work_dir=$(mktemp -d)
 outer_device=
 
@@ -27,22 +29,15 @@ mkfifo "$work_dir/input" "$work_dir/output"
 runner_pid=$!
 
 exec 3>"$work_dir/input"
+# Keep the output pipe open for the inner ping as well as the PID line.
 exec 4<"$work_dir/output"
-IFS= read -r line <&4
-case "$line" in
-    'outside PID='*) child_pid=${line#outside PID=} ;;
-    *) printf 'Expected the outer PID, got %s\n' "$line" >&2; exit 1 ;;
-esac
-printf '%s\n' "$line"
+child_pid=$(read_child_pid <&4)
+printf 'outside PID=%s\n' "$child_pid"
 
 name="dckr-o$$"
 ip link add name "$name" type veth peer name "dckr-i$$"
 outer_device=$name
-# BusyBox can assign its own name to the peer, so read it before moving it.
-peer=$(ip link show dev "$outer_device" | awk 'NR == 1 && split($2, links, "@") == 2 { sub(/:$/, "", links[2]); print links[2] }')
-: "${peer:?could not identify the veth peer}"
-
-ip link set dev "$peer" netns "$child_pid"
+peer=$(move_veth_peer "$outer_device" "$child_pid")
 ip addr add 192.0.2.1/30 dev "$outer_device"
 ip link set dev "$outer_device" up
 printf 'Outside: %s has 192.0.2.1/30\n' "$outer_device"
