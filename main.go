@@ -33,6 +33,7 @@ func run(args []string) int {
 	args = args[1:]
 
 	rootfs := ""
+	overlayRootfs := ""
 	cgroupPath := ""
 	isolateNetwork := false
 	for len(args) >= 2 && args[0] != "--" {
@@ -42,6 +43,8 @@ func run(args []string) int {
 		switch args[0] {
 		case "--rootfs":
 			rootfs = args[1]
+		case "--overlay-rootfs":
+			overlayRootfs = args[1]
 		case "--cgroup":
 			cgroupPath = args[1]
 		case "--network":
@@ -54,7 +57,7 @@ func run(args []string) int {
 		}
 		args = args[2:]
 	}
-	if len(args) < 2 || args[0] != "--" {
+	if len(args) < 2 || args[0] != "--" || (rootfs != "" && overlayRootfs != "") {
 		return runUsage()
 	}
 
@@ -64,7 +67,22 @@ func run(args []string) int {
 		return 1
 	}
 
-	initArgs := append([]string{"init", parentMountNamespace, rootfs}, args[1:]...)
+	overlayWorkspace := ""
+	if overlayRootfs != "" {
+		overlayWorkspace, err = newOverlayWorkspace(overlayRootfs)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "dckr: prepare overlay rootfs: %v\n", err)
+			return 1
+		}
+		defer func() {
+			if err := os.Remove(overlayWorkspace); err != nil {
+				fmt.Fprintf(os.Stderr, "dckr: remove overlay workspace: %v\n", err)
+			}
+		}()
+		rootfs = overlayRootfs
+	}
+
+	initArgs := append([]string{"init", parentMountNamespace, rootfs, overlayWorkspace}, args[1:]...)
 	cmd := exec.Command("/proc/self/exe", initArgs...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Cloneflags: syscall.CLONE_NEWPID | syscall.CLONE_NEWNS}
 	if isolateNetwork {
@@ -100,12 +118,12 @@ func run(args []string) int {
 }
 
 func runUsage() int {
-	fmt.Fprintln(os.Stderr, "usage: dckr run [--rootfs <directory>] [--cgroup <directory>] [--network none] -- <command> [args...]")
+	fmt.Fprintln(os.Stderr, "usage: dckr run [--rootfs <directory> | --overlay-rootfs <directory>] [--cgroup <directory>] [--network none] -- <command> [args...]")
 	return 2
 }
 
 func initContainer(args []string) error {
-	if len(args) < 3 || os.Getpid() != 1 {
+	if len(args) < 4 || os.Getpid() != 1 {
 		return errors.New("init requires a command and must run as PID 1")
 	}
 	childMountNamespace, err := os.Readlink(mountNamespacePath)
@@ -119,7 +137,14 @@ func initContainer(args []string) error {
 	if err := syscall.Mount("", "/", "", syscall.MS_REC|syscall.MS_PRIVATE, ""); err != nil {
 		return fmt.Errorf("make mounts private: %w", err)
 	}
-	if rootfs := args[1]; rootfs != "" {
+	rootfs := args[1]
+	if workspace := args[2]; workspace != "" {
+		rootfs, err = mountOverlayRoot(rootfs, workspace)
+		if err != nil {
+			return err
+		}
+	}
+	if rootfs != "" {
 		if err := switchRoot(rootfs); err != nil {
 			return err
 		}
@@ -128,7 +153,7 @@ func initContainer(args []string) error {
 		return fmt.Errorf("mount procfs: %w", err)
 	}
 
-	commandArgs := args[2:]
+	commandArgs := args[3:]
 	path, err := exec.LookPath(commandArgs[0])
 	if err != nil {
 		return err

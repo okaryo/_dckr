@@ -135,6 +135,15 @@ On ARM64 Linux, the client reached its gateway at `192.0.2.1`, but its ping to `
 
 On ARM64 Linux, the merged `/etc/os-release` contained `NAME="upper layer"`. The upper layer removed `/etc/legacy.conf` and the old cache while retaining the new cache. An assembled rootfs with BusyBox also ran through `dckr run --rootfs`. See the [example](examples/image-layers.sh) and [run instructions](README.md#applying-image-layers).
 
+## OverlayFS Writable Layers
+
+- [x] Use an assembled rootfs as a shared OverlayFS lower layer with `--overlay-rootfs`.
+- [x] Verify that container A can modify an existing file and create a new one while container B and the shared rootfs keep the original view.
+- [x] Confirm that the temporary workspace is removed when a run ends or fails.
+- [x] Explain how copy-up lets container A change a shared file while container B still sees its original contents.
+
+On ARM64 Linux, container A saw its own appended line and new file. While A was still running, container B read the original `/etc/os-release` and did not see the new file. The shared rootfs also retained its original contents. See the [example](examples/overlay-rootfs.sh) and [run instructions](README.md#overlayfs-experiment).
+
 ## Roadmap
 
 ### 1. Namespaces

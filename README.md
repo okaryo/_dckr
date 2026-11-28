@@ -116,12 +116,24 @@ This experiment supports regular files, directories, and OCI whiteouts. It prese
 
 Run `sh examples/image-layers.sh` to generate two sample layers and check the merged files. If the assembled directory contains a runnable command and a `/proc` mount point, it can also be passed to `dckr run --rootfs`.
 
+### Per-container writable layers
+
+Use `--overlay-rootfs <directory>` to run on an OverlayFS root. The supplied rootfs is the shared `lowerdir`. For each run, `dckr` creates a temporary `upperdir` and `workdir` on the same private tmpfs and mounts the combined view as `/`. Writes go to the run's own upper layer and are discarded when the run ends. Keep the shared rootfs at a stable path outside the overlay workspace while the containers run.
+
+With a prepared rootfs containing BusyBox at `/bin/busybox`, an `/etc/os-release` file, and a `/proc` mount point, run the comparison from the repository root.
+
+```sh
+sudo sh examples/overlay-rootfs.sh ./rootfs
+```
+
+Container A appends a line to `/etc/os-release` and creates a new file. Container B starts while A is still running and sees the original file. The script also checks the shared rootfs from outside both containers.
+
 ### Docker Desktop on macOS
 
 Run the experiments from the repository root using a temporary ARM64 Go container in Docker Desktop's Linux VM. The container receives the source files and example scripts over standard input. `SYS_ADMIN` allows `dckr` to create namespaces, mount procfs, and switch the root mount. The cgroup experiments use a writable view of the temporary container's cgroup subtree. The launcher moves into its own child cgroup before enabling `cpu` and `memory` in its parent.
 
 ```sh
-tar -cf - go.mod main.go image.go examples/pid1-exit.sh examples/cgroup-cpu.sh examples/cgroup-memory.sh |
+tar -cf - go.mod main.go image.go overlay.go examples/pid1-exit.sh examples/cgroup-cpu.sh examples/cgroup-memory.sh |
   docker --context desktop-linux run --rm -i --platform linux/arm64 \
     --network none --cap-drop ALL --cap-add SYS_ADMIN --cgroupns private \
     docker.io/library/golang:1.27.4-alpine3.24 sh -ec '
@@ -155,7 +167,7 @@ Here, the outer PID namespace is the temporary Go container's namespace. See [TO
 Run these examples in a temporary Go container with its own network namespace. The loopback experiment uses a comparison interface and route. The veth and bridge experiments create their own links. `NET_ADMIN` allows the examples to configure interfaces, and `NET_RAW` allows them to run `ping`.
 
 ```sh
-tar -cf - go.mod main.go image.go examples/network-namespace.sh examples/network-helpers.sh examples/veth.sh examples/bridge.sh |
+tar -cf - go.mod main.go image.go overlay.go examples/network-namespace.sh examples/network-helpers.sh examples/veth.sh examples/bridge.sh |
   docker --context desktop-linux run --rm -i --platform linux/arm64 \
     --network none --cap-drop ALL --cap-add SYS_ADMIN --cap-add NET_ADMIN --cap-add NET_RAW \
     docker.io/library/golang:1.27.4-alpine3.24 sh -ec '
@@ -177,7 +189,7 @@ tar -cf - go.mod main.go image.go examples/network-namespace.sh examples/network
 The temporary Go container uses Docker's bridge network to install `iptables` from Alpine's package repository. The experiment itself uses its own router and upstream namespaces and sends pings only between them.
 
 ```sh
-tar -cf - go.mod main.go image.go examples/network-helpers.sh examples/network-egress.sh |
+tar -cf - go.mod main.go image.go overlay.go examples/network-helpers.sh examples/network-egress.sh |
   docker --context desktop-linux run --rm -i --platform linux/arm64 \
     --network bridge --cap-drop ALL --cap-add SYS_ADMIN --cap-add NET_ADMIN --cap-add NET_RAW \
     docker.io/library/golang:1.27.4-alpine3.24 sh -ec '
@@ -192,7 +204,7 @@ tar -cf - go.mod main.go image.go examples/network-helpers.sh examples/network-e
 #### Image layer experiment
 
 ```sh
-tar -cf - go.mod main.go image.go examples/image-layers.sh |
+tar -cf - go.mod main.go image.go overlay.go examples/image-layers.sh |
   docker --context desktop-linux run --rm -i --platform linux/arm64 \
     --network none --cap-drop ALL \
     docker.io/library/golang:1.27.4-alpine3.24 sh -ec '
@@ -200,6 +212,28 @@ tar -cf - go.mod main.go image.go examples/image-layers.sh |
       tar -xf -
       go build -o dckr .
       sh examples/image-layers.sh
+    '
+```
+
+#### OverlayFS experiment
+
+The temporary Go container builds a small rootfs from a tar layer. This example includes `SYS_ADMIN` and `DAC_OVERRIDE` for the OverlayFS mount in Docker Desktop.
+
+```sh
+tar -cf - go.mod main.go image.go overlay.go examples/overlay-rootfs.sh |
+  docker --context desktop-linux run --rm -i --platform linux/arm64 \
+    --network none --cap-drop ALL --cap-add SYS_ADMIN --cap-add DAC_OVERRIDE \
+    docker.io/library/golang:1.27.4-alpine3.24 sh -ec '
+      cd "$(mktemp -d)"
+      tar -xf -
+      go build -o dckr .
+      mkdir -p layer/bin layer/etc layer/lib layer/proc
+      cp /bin/busybox layer/bin/
+      cp -L /lib/ld-musl-aarch64.so.1 layer/lib/
+      printf "NAME=\"shared base\"\n" > layer/etc/os-release
+      tar -cf base.tar -C layer .
+      ./dckr image unpack rootfs base.tar
+      sh examples/overlay-rootfs.sh rootfs
     '
 ```
 
