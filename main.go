@@ -13,7 +13,11 @@ import (
 const mountNamespacePath = "/proc/self/ns/mnt"
 
 func main() {
-	os.Exit(run(os.Args[1:]))
+	args := os.Args[1:]
+	if len(args) > 0 && args[0] == "image" {
+		os.Exit(runImage(args[1:]))
+	}
+	os.Exit(run(args))
 }
 
 func run(args []string) int {

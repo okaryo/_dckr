@@ -126,6 +126,15 @@ On ARM64 Linux, the first ping from `192.0.2.1` to `192.0.2.2` received no reply
 
 On ARM64 Linux, the client reached its gateway at `192.0.2.1`, but its ping to `198.51.100.2` received no reply until the router forwarded packets and the upstream had a return path. An explicit return route worked. After removing it, source NAT to `198.51.100.1` also worked, and the NAT rule counted one packet. The enclosing network namespace kept its original links, routes, and forwarding setting. See the [example](examples/network-egress.sh) and [run instructions](README.md#ipv4-forwarding-and-nat-experiment).
 
+## Applying Image Layers
+
+- [x] Apply uncompressed local layer tar files to a new rootfs in base-to-top order.
+- [x] Verify file replacement, explicit deletion, and opaque directory contents while preserving files created in the same layer as a whiteout.
+- [x] Run a command from an assembled rootfs using `dckr run --rootfs`.
+- [x] Explain why a whiteout can hide a file from a lower layer and still allow a file at the same path in its own layer.
+
+On ARM64 Linux, the merged `/etc/os-release` contained `NAME="upper layer"`. The upper layer removed `/etc/legacy.conf` and the old cache while retaining the new cache. An assembled rootfs with BusyBox also ran through `dckr run --rootfs`. See the [example](examples/image-layers.sh) and [run instructions](README.md#applying-image-layers).
+
 ## Roadmap
 
 ### 1. Namespaces
